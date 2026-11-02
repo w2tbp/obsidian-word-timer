@@ -83,8 +83,8 @@
 
 ## 技术实现
 
-- 纯 JavaScript 插件，无构建步骤，无 npm 依赖
-- 核心计数逻辑抽离到 `lib/counter.js`，可独立测试
+- 纯 JavaScript 插件，无 npm 依赖
+- 核心计数逻辑抽离到 `lib/counter.js`，可独立测试；发布时由 `build.js` 内联进 `dist/main.js`
 - 使用 Obsidian API：`editor-change` 事件监听编辑器变化
 - 状态栏每秒刷新一次
 
@@ -100,7 +100,34 @@
 npm test
 ```
 
-测试覆盖（32 个用例）：
+构建发布包：
+
+```bash
+npm run build
+```
+
+构建产物在 `dist/` 目录，包含 `main.js`、`manifest.json`、`styles.css`。
+
+## 发布流程
+
+1. 更新 `manifest.json` 和 `package.json` 中的 `version` 字段
+2. 提交变更：`git commit -am "bump version to 0.x.x"`
+3. 打 tag：`git tag v0.x.x`
+4. 推送 tag：`git push origin v0.x.x`
+
+GitHub Actions 会自动：
+- 运行测试（`node --test`）
+- 构建 bundle（`node build.js`）
+- 校验 manifest 版本与 tag 一致
+- 创建 GitHub Release，上传 `main.js`、`manifest.json`、`styles.css` 和 `obsidian-word-timer-<version>.zip`
+
+用户通过 Obsidian 社区插件或 BRAT 安装时，会下载 release 中的这三个文件（不进入子目录）。
+
+## 打包原理
+
+`build.js` 把 `lib/counter.js` 内联进 `main.js`，替换掉 `require('./lib/counter')`，产出零相对依赖的单文件 bundle。这样 Obsidian 只下载 `main.js` 也能正常运行。
+
+测试覆盖（36 个用例）：
 - 字数统计（中文/英文/混合/标点/空串/多行/非字符串输入）
 - 字符统计（含标点空格/空串/非字符串）
 - 口径切换（word ↔ character）
@@ -112,6 +139,7 @@ npm test
 - 暂停时长不计入 elapsed
 - 首次打开已有内容文件不计入（跨文件基准）
 - 口径切换重置基准（word ↔ character 切换后净增归零）
+- 打包产物验证（dist/main.js 无相对依赖、可实例化、含内联 counter 代码）
 
 ## 版本记录
 

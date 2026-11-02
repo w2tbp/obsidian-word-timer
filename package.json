@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "description": "像番茄钟一样的写作字数计时器",
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "build": "node build.js"
   },
   "keywords": ["obsidian", "plugin", "writing", "timer", "word-count"],
   "author": "",

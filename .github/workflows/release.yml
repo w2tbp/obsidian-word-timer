@@ -1,0 +1,96 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. v0.1.0). If empty, uses github.ref_name.'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Determine version
+        id: version
+        env:
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [ -n "$INPUT_TAG" ]; then
+            VERSION="$INPUT_TAG"
+          else
+            VERSION="$REF_NAME"
+          fi
+          if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Invalid version format: $VERSION (must be vX.Y.Z)"
+            exit 1
+          fi
+          CLEAN_VERSION="${VERSION#v}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "clean_version=$CLEAN_VERSION" >> "$GITHUB_OUTPUT"
+          echo "Releasing $VERSION (manifest version: $CLEAN_VERSION)"
+
+      - name: Verify manifest version matches tag
+        run: |
+          MANIFEST_VERSION=$(node -e "console.log(require('./manifest.json').version)")
+          if [ "$MANIFEST_VERSION" != "${{ steps.version.outputs.clean_version }}" ]; then
+            echo "::error::manifest.json version ($MANIFEST_VERSION) does not match tag (${{ steps.version.outputs.clean_version }})"
+            exit 1
+          fi
+          echo "✓ manifest version matches tag: $MANIFEST_VERSION"
+
+      - name: Run tests
+        run: node --test
+
+      - name: Build bundle
+        run: node build.js
+
+      - name: Verify bundle
+        run: |
+          if [ ! -f dist/main.js ]; then
+            echo "::error::dist/main.js not found after build"
+            exit 1
+          fi
+          if grep -q "require('./lib/counter')" dist/main.js; then
+            echo "::error::dist/main.js still contains require('./lib/counter')"
+            exit 1
+          fi
+          echo "✓ bundle verified"
+
+      - name: Package release zip
+        run: |
+          cd dist
+          zip -r "../obsidian-word-timer-${{ steps.version.outputs.clean_version }}.zip" \
+            main.js \
+            manifest.json \
+            styles.css
+          cd ..
+          echo "✓ created obsidian-word-timer-${{ steps.version.outputs.clean_version }}.zip"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: ${{ steps.version.outputs.version }}
+          generate_release_notes: true
+          files: |
+            dist/main.js
+            dist/manifest.json
+            dist/styles.css
+            obsidian-word-timer-${{ steps.version.outputs.clean_version }}.zip
