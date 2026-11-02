@@ -1,0 +1,10 @@
+.word-timer-status-bar {
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  padding: 0 8px;
+}
+
+.word-timer-status-bar:hover {
+  background-color: var(--background-modifier-hover);
+  border-radius: 4px;
+}
