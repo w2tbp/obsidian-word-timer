@@ -1,7 +1,7 @@
 'use strict';
 
 const { Plugin, Notice, PluginSettingTab, Setting } = require('obsidian');
-const { WritingSession } = require('./lib/counter');
+const { WritingSession, countText } = require('./lib/counter');
 
 const DEFAULT_SETTINGS = {
   mode: 'word',
@@ -51,7 +51,7 @@ module.exports = class WordTimerPlugin extends Plugin {
     
     this.registerEvent(
       this.app.workspace.on('editor-change', (editor, info) => {
-        if (!this.session.isActive() || this.session.isPaused()) return;
+        if (!this.session.isActive()) return;
         const file = info.file;
         if (file) {
           this.session.updateFile(file.path, editor.getValue());
@@ -61,7 +61,7 @@ module.exports = class WordTimerPlugin extends Plugin {
     
     this.registerEvent(
       this.app.workspace.on('active-leaf-change', (leaf) => {
-        if (!this.session.isActive() || this.session.isPaused()) return;
+        if (!this.session.isActive()) return;
         if (leaf && leaf.view && leaf.view.file) {
           const file = leaf.view.file;
           const editor = leaf.view.editor;
@@ -106,17 +106,21 @@ module.exports = class WordTimerPlugin extends Plugin {
     
     const activeFile = this.app.workspace.getActiveFile();
     if (activeFile) {
-      const editor = this.app.workspace.getActiveViewOfType(require('obsidian').MarkdownView);
-      if (editor && editor.editor) {
-        this.session.setBaseline(activeFile.path, 
-          require('./lib/counter').countText(editor.editor.getValue(), this.settings.mode));
+      const mdView = this.app.workspace.getActiveViewOfType(require('obsidian').MarkdownView);
+      if (mdView && mdView.editor) {
+        const text = mdView.editor.getValue();
+        this.session.setBaseline(
+          activeFile.path,
+          countText(text, this.settings.mode),
+          text
+        );
       }
     }
-    
+
     this.updateStatusBar();
-    this.updateInterval = setInterval(() => {
+    this.updateInterval = this.registerInterval(setInterval(() => {
       this.updateStatusBar();
-    }, 1000);
+    }, 1000));
     
     new Notice('✍️ 写作计时开始');
   }
@@ -134,9 +138,9 @@ module.exports = class WordTimerPlugin extends Plugin {
     } else {
       const activeFile = this.app.workspace.getActiveFile();
       if (activeFile) {
-        const editor = this.app.workspace.getActiveViewOfType(require('obsidian').MarkdownView);
-        if (editor && editor.editor) {
-          this.session.updateFile(activeFile.path, editor.editor.getValue());
+        const mdView = this.app.workspace.getActiveViewOfType(require('obsidian').MarkdownView);
+        if (mdView && mdView.editor) {
+          this.session.updateFile(activeFile.path, mdView.editor.getValue());
         }
       }
       new Notice('▶ 写作计时继续');
@@ -198,7 +202,7 @@ class WordTimerSettingTab extends PluginSettingTab {
           this.plugin.settings.mode = value;
           await this.plugin.saveSettings();
           if (this.plugin.session.isActive()) {
-            this.plugin.session.mode = value;
+            this.plugin.session.setMode(value);
           }
         }));
     
