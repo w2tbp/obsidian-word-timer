@@ -4,14 +4,26 @@ const { describe, it, before } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { execFileSync } = require('node:child_process');
 const Module = require('node:module');
 
 const DIST_MAIN = path.resolve(__dirname, '..', 'dist', 'main.js');
+const BUILD_SCRIPT = path.resolve(__dirname, '..', 'build.js');
 
 describe('dist bundle', () => {
   before(() => {
     if (!fs.existsSync(DIST_MAIN)) {
-      throw new Error('dist/main.js not found — run `node build.js` before tests');
+      try {
+        execFileSync(process.execPath, [BUILD_SCRIPT], { stdio: ['pipe', 'pipe', 'pipe'] });
+      } catch (err) {
+        const stderr = err.stderr ? err.stderr.toString() : '';
+        const stdout = err.stdout ? err.stdout.toString() : '';
+        assert.fail(
+          `auto-build failed (exit ${err.status}).\n` +
+          `stdout: ${stdout}\nstderr: ${stderr}`
+        );
+      }
+      assert.ok(fs.existsSync(DIST_MAIN), 'dist/main.js still missing after build');
     }
   });
 
